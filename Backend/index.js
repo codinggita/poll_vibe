@@ -93,7 +93,6 @@ app.post('/api/webhook', bodyParser.raw({ type: 'application/json' }), async (re
 app.use(express.json());
 
 const clerkPubKey = process.env.CLERK_PUBLISHABLE_KEY;
-console.log(clerkPubKey)
 
 // Middleware to verify authentication
 const requireAuth = ClerkExpressRequireAuth();
@@ -112,13 +111,21 @@ app.get('/protected', requireAuth, (req, res) => {
 // Create a new poll
 app.post('/poll', async (req, res) => {
 
-    const { poll_details, Created_by, endDate, poll_settings } = req.body;
 
-    if (!poll_details || !Created_by || !poll_details.poll_options || !endDate || !poll_settings) {
-        return res.status(400).json({ error: 'poll_details and Created_by are required, and poll_details must contain poll_options' });
+
+    const { poll_details, ClerkID, endDate, poll_settings } = req.body;
+
+    if (!poll_details || !poll_details.poll_options || !endDate || !poll_settings) {
+        return res.status(400).json({ error: 'poll_details and ClerkID are required, and poll_details must contain array of poll_options' });
     }
 
     try {
+
+        const FindUserByClerkID = await User.find({ clerkUserId: ClerkID })
+
+        const Created_by = FindUserByClerkID[0]._id
+        // console.log(FindUserByClerkID[0]._id)
+
         const NewPoll = new PollDetail({ endDate, poll_details, poll_settings, Created_by });
         await NewPoll.save();
 
@@ -177,6 +184,41 @@ app.get('/poll/:poll_id', async (req, res) => {
 
             return res.status(400).json({ error: 'This poll has ended.' });
         }
+
+        res.json({ PollData: findPoll, user })
+    } catch (err) {
+        res.status(500).json({ Error: err.message })
+    }
+
+})
+
+
+// Get All Polls for a User
+app.get('/user/polls', requireAuth, async (req, res) => {
+
+    const user = req.auth;
+
+    // res.json({ ID: user.userId })
+
+    try {
+        const findPoll = await User.find({ clerkUserId: user.userId }).populate("UserPoll")
+
+        if (!findPoll) {
+            return res.status(404).json({ error: 'Polls not found' });
+        }
+
+        // const now = new Date();
+        // const endDate = new Date(findPoll.endDate);
+        // console.log(new Date().toISOString());
+
+
+        // if (now > endDate) {
+        //     // If endDate has passed, update poll_status to false
+        //     findPoll.poll_status = false;
+        //     await findPoll.save();
+
+        //     return res.status(400).json({ error: 'This poll has ended.' });
+        // }
 
         res.json({ PollData: findPoll, user })
     } catch (err) {
